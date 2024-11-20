@@ -21,6 +21,6 @@ public class ImageController {
             return "Por favor, selecione uma imagem para upload.";
         }
 
-        return imageService.ProcessaImagem(file);
+        return imageService.enviarImagemParaFila(file);
     }
 }

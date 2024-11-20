@@ -1,5 +1,6 @@
 package com.arilson.ocr.services;
 
+import com.arilson.ocr.model.OcrMessage;
 import org.bytedeco.javacv.Java2DFrameUtils;
 import org.bytedeco.opencv.opencv_core.Mat;
 import net.sourceforge.tess4j.*;
@@ -12,7 +13,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
-import java.util.Arrays;
+import java.util.UUID;
 
 import static org.bytedeco.opencv.global.opencv_imgcodecs.imread;
 import static org.bytedeco.opencv.global.opencv_imgproc.*;
@@ -20,17 +21,17 @@ import static org.bytedeco.opencv.global.opencv_imgproc.*;
 @Service
 public class ImageService {
 
-    @Value("${tesseract.data.path}")
-    private String tesseractPath;
-
     @Value("${rabbitmq.exchange.name}")
     private String exchange;
 
     @Value("${rabbitmq.routing.key}")
     private String routingKey;
 
-    @Value("${rabbitmq.routing.reply-key}")
-    private String replyRoutingKey;
+    @Value("${tesseract.data.path}")
+    private String tesseractPath;
+
+    @Value("${tesseract.language}")
+    private String tesseractLanguage;
 
     private final RabbitTemplate rabbitTemplate;
 
@@ -38,24 +39,24 @@ public class ImageService {
         this.rabbitTemplate = rabbitTemplate;
     }
 
-    public String ProcessaImagem(MultipartFile file) {
+    public String enviarImagemParaFila(MultipartFile file) {
         try {
             File tempImg = File.createTempFile("imagemTemp", file.getOriginalFilename());
             file.transferTo(tempImg);
 
-            BufferedImage processaImagem = processaImagem(tempImg);
+            String id = UUID.randomUUID().toString();
 
-            String textoExtraido = extraiTexto(processaImagem);
+            OcrMessage message = new OcrMessage(id, tempImg.getAbsolutePath());
 
-            tempImg.delete();
+            rabbitTemplate.convertAndSend(exchange, routingKey, message);
 
-            return "Texto:" + textoExtraido;
+            return id;
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
     }
 
-    private BufferedImage processaImagem(File file) throws IOException {
+    public BufferedImage processaImagem(File file) throws IOException {
         //Carrega imagem usando OpenCV
         Mat imagem = imread(file.getAbsolutePath());
 
@@ -82,11 +83,11 @@ public class ImageService {
         return Java2DFrameUtils.toBufferedImage(binarizedImagem);
     }
 
-    private String extraiTexto(BufferedImage imagem) throws TesseractException {
+    public String extraiTexto(BufferedImage imagem) throws TesseractException {
         Tesseract tesseract = new Tesseract();
 
         tesseract.setDatapath(tesseractPath);
-        tesseract.setLanguage("por");
+        tesseract.setLanguage(tesseractLanguage);
 
         return tesseract.doOCR(imagem);
     }
