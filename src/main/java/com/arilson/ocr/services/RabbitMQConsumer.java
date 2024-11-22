@@ -16,6 +16,7 @@ public class RabbitMQConsumer {
     private final ImageService imageService;
     private final ResultadoService resultadoService;
     private final RabbitTemplate rabbitTemplate;
+    private final JedisService jedisService;
 
     @Value("${rabbitmq.exchange.name}")
     private String exchange;
@@ -23,10 +24,11 @@ public class RabbitMQConsumer {
     @Value("${rabbitmq.routing.reply-key}")
     private String replyRoutingKey;
 
-    public RabbitMQConsumer(ImageService imageService, ResultadoService resultadoService, RabbitTemplate rabbitTemplate) {
+    public RabbitMQConsumer(ImageService imageService, ResultadoService resultadoService, RabbitTemplate rabbitTemplate, JedisService jedisService) {
         this.imageService = imageService;
         this.resultadoService = resultadoService;
         this.rabbitTemplate = rabbitTemplate;
+        this.jedisService = jedisService;
     }
 
     @RabbitListener(queues = "${rabbitmq.queue.name}")
@@ -45,7 +47,7 @@ public class RabbitMQConsumer {
                     textoExtraido
             );
 
-            resultadoService.salvarResultado(mensagemOcr);
+            jedisService.save(mensagemOcr.id(), textoExtraido);
             rabbitTemplate.convertAndSend(exchange, replyRoutingKey, mensagemOcr);
 
             file.delete();
@@ -58,7 +60,7 @@ public class RabbitMQConsumer {
                     e.getMessage()
             );
 
-            resultadoService.salvarResultado(erroMensagem);
+            jedisService.save(erroMensagem.id(), "ERRO: " + e.getMessage());
             rabbitTemplate.convertAndSend(exchange, replyRoutingKey, erroMensagem);
             e.printStackTrace();
         }
